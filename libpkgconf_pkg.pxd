@@ -1,3 +1,4 @@
+from libcpp cimport bool
 from libpkgconf_iter cimport *
 from libpkgconf_client cimport *
 
@@ -23,6 +24,7 @@ ctypedef pkgconf_dependency_ pkgconf_dependency_t
 ctypedef pkgconf_pkg_ pkgconf_pkg_t
 ctypedef bool (*pkgconf_pkg_iteration_func_t)(const pkgconf_pkg_t *pkg, void *data)
 ctypedef void (*pkgconf_pkg_traverse_func_t)(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *data, unsigned int flags)
+ctypedef bool (*pkgconf_queue_apply_func_t)(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth, unsigned int flags)
 
 cdef extern from "libpkgconf/libpkgconf.h":
     struct pkgconf_dependency_:
@@ -71,3 +73,9 @@ cdef extern from "libpkgconf/libpkgconf.h":
     unsigned int pkgconf_pkg_libs(pkgconf_client_t *client, pkgconf_pkg_t *root, pkgconf_list_t *list, int maxdepth, unsigned int flags)
     pkgconf_pkg_comparator_t pkgconf_pkg_comparator_lookup_by_name(const char *name)
     pkgconf_pkg_t *pkgconf_builtin_pkg_get(const char *name)
+
+    void pkgconf_queue_push(pkgconf_list_t *list, const char *package)
+    bool pkgconf_queue_compile(pkgconf_client_t *client, pkgconf_pkg_t *world, pkgconf_list_t *list)
+    void pkgconf_queue_free(pkgconf_list_t *list)
+    bool pkgconf_queue_apply(pkgconf_client_t *client, pkgconf_list_t *list, pkgconf_queue_apply_func_t func, int maxdepth, unsigned int flags, void *data)
+    bool pkgconf_queue_validate(pkgconf_client_t *client, pkgconf_list_t *list, int maxdepth, unsigned int flags)
