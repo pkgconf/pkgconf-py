@@ -18,6 +18,7 @@ from libpkgconf_client cimport *
 from libpkgconf_tuple cimport *
 from libpkgconf_path cimport *
 from libpkgconf_pkg cimport *
+from libpkgconf_fragment cimport *
 
 cdef extern from "libpkgconf/libpkgconf.h":
     int pkgconf_compare_version(const char *a, const char *b)
