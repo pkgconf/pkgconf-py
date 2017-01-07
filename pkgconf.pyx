@@ -37,7 +37,6 @@ comparator_map = {
 
 class ResolverError(Exception):
     def __init__(self, err):
-        global resolver_errmap
         super().__init__(resolver_errmap.get(err, 'unknown error'))
 
 
@@ -90,8 +89,6 @@ cdef class DependencyRef:
     cdef PackageRef parent
 
     def __repr__(self):
-        global comparator_map
-
         summary = "<DependencyRef: %s" % self.package
         if self.compare != libpkgconf.pkgconf_pkg_comparator_.PKGCONF_CMP_ANY:
             summary += " %s %s" % (comparator_map.get(self.compare, '???'), self.version)
