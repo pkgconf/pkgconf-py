@@ -1,6 +1,13 @@
 from libpkgconf_iter cimport *
 from libpkgconf_client cimport *
 
+cdef enum resolver_err:
+    NoError                    = 0x0
+    PackageNotFound            = 0x1
+    VersionMismatch            = 0x2
+    PackageConflict            = 0x4
+    DependencyGraphBreak       = 0x8
+
 cdef enum pkgconf_pkg_comparator_:
     PKGCONF_CMP_NOT_EQUAL
     PKGCONF_CMP_ANY

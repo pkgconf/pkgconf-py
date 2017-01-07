@@ -6,6 +6,20 @@ cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *c
     (<object>error_data).handle_error(msg.decode('utf-8'))
 
 
+resolver_errmap = {
+    libpkgconf.resolver_err.NoError: 'no error',
+    libpkgconf.resolver_err.PackageNotFound: 'package not found',
+    libpkgconf.resolver_err.VersionMismatch: 'version mismatch',
+    libpkgconf.resolver_err.PackageConflict: 'package conflicts with another package',
+    libpkgconf.resolver_err.DependencyGraphBreak: 'dependency graph break',
+}
+
+
+class ResolverError(Exception):
+    def __init__(self, err):
+        super().__init__(resolver_errmap.get(err, 'unknown error'))
+
+
 cdef class PathIterator:
     cdef libpkgconf.pkgconf_node_t *iter
 
