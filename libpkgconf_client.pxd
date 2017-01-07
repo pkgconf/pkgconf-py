@@ -30,3 +30,5 @@ cdef extern from "libpkgconf/libpkgconf.h":
     void pkgconf_client_set_sysroot_dir(pkgconf_client_t *client, const char *sysroot_dir)
     const char *pkgconf_client_get_buildroot_dir(const pkgconf_client_t *client)
     void pkgconf_client_set_buildroot_dir(pkgconf_client_t *client, const char *buildroot_dir)
+    void pkgconf_pkg_dir_list_build(pkgconf_client_t *client, unsigned int flags)
+
