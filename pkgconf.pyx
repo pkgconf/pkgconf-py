@@ -3,7 +3,7 @@ cimport libpkgconf
 
 
 cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *client, void *error_data):
-    (<object>error_data).handle_error(msg.decode('utf-8'))
+    (<object>error_data).handle_error(msg.decode('utf-8')[0:-1])
 
 
 resolver_errmap = {
