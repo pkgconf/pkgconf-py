@@ -23,20 +23,33 @@ class ResolverError(Exception):
 
 
 cdef class PackageRef:
+    cdef libpkgconf.pkgconf_client_t *pc_client
     cdef libpkgconf.pkgconf_pkg_t *parent
 
     def __repr__(self):
         summary = "<PackageRef: %s" % self.name
         if self.version:
             summary += " [%s]" % self.version
+        if self.refcount:
+            summary += ", refcount=%d" % self.refcount
         summary += ">"
         return summary
+
+    @property
+    def refcount(self):
+        return self.parent.refcount
 
     @property
     def name(self):
         if not self.parent.id:
             return None
         return self.parent.id.decode('utf-8')
+
+    @property
+    def filename(self):
+        if not self.parent.filename:
+            return None
+        return self.parent.filename.decode('utf-8')
 
     @property
     def realname(self):
@@ -51,8 +64,27 @@ cdef class PackageRef:
         return self.parent.version.decode('utf-8')
 
     @property
+    def description(self):
+        if not self.parent.description:
+            return None
+        return self.parent.description.decode('utf-8')
+
+    @property
+    def url(self):
+        if not self.parent.url:
+            return None
+        return self.parent.url.decode('utf-8')
+
+    @property
     def flags(self):
         return self.parent.flags
+
+    @property
+    def vars(self):
+        td = TupleProxy()
+        td.wrapped = &self.parent.vars
+        td.wrapped_client = self.pc_client
+        return td
 
 
 cdef class Package(PackageRef):
@@ -124,6 +156,7 @@ cdef class Queue:
 
         root = PackageRef()
         root.client = self.client
+        root.pc_client = self.pc_client
         root.parent = &self.world
 
         callback(self.client, root, maxdepth, traits)
@@ -292,6 +325,17 @@ cdef class Client:
         q = Queue()
         q.pc_client = &self.pc_client
         return q
+
+    def lookup_package(self, name, traits=0):
+        """Looks up a package and returns a Package reference."""
+        cdef libpkgconf.pkgconf_pkg_t *pkg
+        pkg = libpkgconf.pkgconf_pkg_find(&self.pc_client, name.encode('utf-8'), traits)
+        if not pkg:
+            return None
+        pr = PackageRef()
+        pr.parent = pkg
+        pr.pc_client = &self.pc_client
+        return pr
 
 
 def compare_version(a, b):
