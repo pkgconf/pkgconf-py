@@ -16,3 +16,6 @@ cdef enum pkgconf_pkg_comparator_t:
 #ctypedef bool (*pkgconf_queue_apply_func_t)(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth, unsigned int flags)
 
 from libpkgconf_client cimport *
+
+cdef extern from "libpkgconf/libpkgconf.h":
+    int pkgconf_compare_version(const char *a, const char *b)
