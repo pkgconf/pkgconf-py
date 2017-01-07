@@ -1,3 +1,4 @@
+from libc.stdlib cimport free
 from libc.string cimport strdup
 from libcpp cimport bool
 cimport libpkgconf
@@ -38,6 +39,46 @@ class ResolverError(Exception):
     def __init__(self, err):
         global resolver_errmap
         super().__init__(resolver_errmap.get(err, 'unknown error'))
+
+
+cdef class FragmentIterator:
+    cdef libpkgconf.pkgconf_node_t *iter
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        cdef libpkgconf.pkgconf_fragment_t *frag
+
+        if not self.iter:
+            raise StopIteration()
+
+        iter = self.iter
+        frag = <libpkgconf.pkgconf_fragment_t *> iter.data
+        self.iter = iter.next
+
+        return (chr(frag.type), frag.data.decode('utf-8'))
+
+
+cdef class FragmentList:
+    cdef libpkgconf.pkgconf_list_t *lst
+    cdef Client client
+    cdef PackageRef parent
+
+    def __len__(self):
+        return self.lst.length
+
+    def __iter__(self):
+        fi = FragmentIterator()
+        fi.iter = self.lst.head
+        return fi
+
+    def __str__(self):
+        rawbuf = libpkgconf.pkgconf_fragment_render(self.lst)
+        buf = rawbuf.decode('utf-8')
+        free(rawbuf)
+
+        return buf
 
 
 cdef class DependencyRef:
@@ -109,6 +150,9 @@ cdef class DependencyList:
     cdef Client client
     cdef PackageRef parent
     cdef libpkgconf.pkgconf_list_t *lst
+
+    def __len__(self):
+        return self.lst.length
 
     def __iter__(self):
         di = DependencyIterator()
@@ -191,6 +235,29 @@ cdef class PackageRef:
         result = libpkgconf.pkgconf_pkg_traverse(&self.client.pc_client, self.parent, <libpkgconf.pkgconf_pkg_traverse_func_t> traverse_trampoline, <void *> passback, maxdepth, traits)
         if result:
             raise ResolverError(result)
+
+    cdef fraglist(self, libpkgconf.pkgconf_list_t *lst):
+        fl = FragmentList()
+        fl.client = self.client
+        fl.parent = self
+        fl.lst = lst
+        return fl
+
+    @property
+    def cflags(self):
+        return self.fraglist(&self.parent.cflags)
+
+    @property
+    def cflags_private(self):
+        return self.fraglist(&self.parent.cflags_private)
+
+    @property
+    def libs(self):
+        return self.fraglist(&self.parent.libs)
+
+    @property
+    def libs_private(self):
+        return self.fraglist(&self.parent.libs_private)
 
     cdef deplist(self, libpkgconf.pkgconf_list_t *lst):
         dl = DependencyList()
