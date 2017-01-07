@@ -368,6 +368,40 @@ cdef class Queue:
 
         callback(self.client, root, maxdepth, traits)
 
+    def cflags(self, cflags_private=False, maxdepth=-1, traits=0):
+        """Compiles a dependency resolution queue and collects CFLAGS from all of the child packages.
+        Throws ResolverError if an exception is encountered.
+        """
+        if not self.validate(maxdepth, traits):
+            return
+
+        if cflags_private:
+            traits |= libpkgconf.pkgconf_client_traits_t.MergePrivateFragments
+
+        fl = FragmentList()
+        result = libpkgconf.pkgconf_pkg_cflags(&self.client.pc_client, &self.world, &fl.fraglist, maxdepth, traits)
+        if result:
+            raise ResolverError(result)
+
+        return fl
+
+    def libs(self, libs_private=False, maxdepth=-1, traits=0):
+        """Compiles a dependency resolution queue and collects CFLAGS from all of the child packages.
+        Throws ResolverError if an exception is encountered.
+        """
+        if not self.validate(maxdepth, traits):
+            return
+
+        if libs_private:
+            traits |= libpkgconf.pkgconf_client_traits_t.MergePrivateFragments
+
+        fl = FragmentList()
+        result = libpkgconf.pkgconf_pkg_libs(&self.client.pc_client, &self.world, &fl.fraglist, maxdepth, traits)
+        if result:
+            raise ResolverError(result)
+
+        return fl
+
 
 cdef class PathIterator:
     cdef libpkgconf.pkgconf_node_t *iter
