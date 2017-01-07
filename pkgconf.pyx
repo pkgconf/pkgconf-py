@@ -1,3 +1,5 @@
+# cython: c_string_type=unicode, c_string_encoding=utf8
+
 from libc.stdlib cimport free
 from libc.string cimport strdup
 from libcpp cimport bool
@@ -5,7 +7,7 @@ cimport libpkgconf
 
 
 cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *client, void *error_data):
-    (<object>error_data).handle_error(msg.decode('utf-8')[0:-1])
+    (<object>error_data).handle_error(<str> msg[0:-1])
 
 
 cdef void traverse_trampoline(libpkgconf.pkgconf_client_t *client, libpkgconf.pkgconf_pkg_t *pkg, void *data, unsigned int flags):
@@ -56,7 +58,7 @@ cdef class FragmentIterator:
         frag = <libpkgconf.pkgconf_fragment_t *> iter.data
         self.iter = iter.next
 
-        return (chr(frag.type), frag.data.decode('utf-8'))
+        return (chr(frag.type), <str> frag.data)
 
 
 cdef class FragmentList:
@@ -77,7 +79,7 @@ cdef class FragmentList:
 
     def __str__(self):
         rawbuf = libpkgconf.pkgconf_fragment_render(self.lst)
-        buf = rawbuf.decode('utf-8')
+        buf = <str> rawbuf
         free(rawbuf)
 
         return buf
@@ -98,7 +100,7 @@ cdef class DependencyRef:
     def package(self):
         if not self.wrapped.package:
             return None
-        return self.wrapped.package.decode('utf-8')
+        return <str> self.wrapped.package
 
     @property
     def compare(self):
@@ -108,7 +110,7 @@ cdef class DependencyRef:
     def version(self):
         if not self.wrapped.version:
             return None
-        return self.wrapped.version.decode('utf-8')
+        return <str> self.wrapped.version
 
     def resolve(self, traits=0):
         cdef libpkgconf.pkgconf_pkg_t *pkg
@@ -186,37 +188,37 @@ cdef class PackageRef:
     def name(self):
         if not self.parent.id:
             return None
-        return self.parent.id.decode('utf-8')
+        return <str> self.parent.id
 
     @property
     def filename(self):
         if not self.parent.filename:
             return None
-        return self.parent.filename.decode('utf-8')
+        return <str> self.parent.filename
 
     @property
     def realname(self):
         if not self.parent.realname:
             return None
-        return self.parent.realname.decode('utf-8')
+        return <str> self.parent.realname
 
     @property
     def version(self):
         if not self.parent.version:
             return None
-        return self.parent.version.decode('utf-8')
+        return <str> self.parent.version
 
     @property
     def description(self):
         if not self.parent.description:
             return None
-        return self.parent.description.decode('utf-8')
+        return <str> self.parent.description
 
     @property
     def url(self):
         if not self.parent.url:
             return None
-        return self.parent.url.decode('utf-8')
+        return <str> self.parent.url
 
     @property
     def flags(self):
@@ -376,7 +378,7 @@ cdef class PathIterator:
         po = <libpkgconf.pkgconf_path_t *> self.iter.data
         self.iter = self.iter.next
 
-        return po.path.decode('utf-8')
+        return <str> po.path
 
 
 cdef class PathProxy:
@@ -420,7 +422,7 @@ cdef class TupleIterator:
         tuple = <libpkgconf.pkgconf_tuple_t *> self.iter.data
         self.iter = self.iter.next
 
-        return (tuple.key.decode('utf-8'), tuple.value.decode('utf-8'))
+        return (<str> tuple.key, <str> tuple.value)
 
 
 cdef class TupleProxy:
@@ -443,7 +445,7 @@ cdef class TupleProxy:
         cdef const char *value
         value = libpkgconf.pkgconf_tuple_find(self.wrapped_client, self.wrapped, key.encode('utf-8'))
         if value:
-            return value.decode('utf-8')
+            return <str> value
         return None
 
     def __setitem__(self, key, value):
