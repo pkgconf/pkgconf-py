@@ -61,7 +61,7 @@ cdef class FragmentIterator:
         return (chr(frag.type), <str> frag.data)
 
 
-cdef class FragmentList:
+cdef class FragmentListRef:
     cdef libpkgconf.pkgconf_list_t *lst
     cdef Client client
     cdef PackageRef parent
@@ -83,6 +83,13 @@ cdef class FragmentList:
         free(rawbuf)
 
         return buf
+
+
+cdef class FragmentList(FragmentListRef):
+    cdef libpkgconf.pkgconf_list_t fraglist
+
+    def __cinit__(self):
+        self.lst = &self.fraglist
 
 
 cdef class DependencyRef:
@@ -239,7 +246,7 @@ cdef class PackageRef:
             raise ResolverError(result)
 
     cdef fraglist(self, libpkgconf.pkgconf_list_t *lst):
-        fl = FragmentList()
+        fl = FragmentListRef()
         fl.client = self.client
         fl.parent = self
         fl.lst = lst
