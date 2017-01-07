@@ -1,13 +1,12 @@
 ctypedef pkgconf_node_ pkgconf_node_t
-ctypedef pkgconf_list_ pkgconf_list_t
 
-cdef extern from "libpkgconf/libpkgconf.h":
-    struct pkgconf_node_:
+cdef extern from "libpkgconf/iter.h":
+    cdef struct pkgconf_node_:
         pkgconf_node_t *prev
         pkgconf_node_t *next
         void *data
 
-    struct pkgconf_list_:
+    ctypedef struct pkgconf_list_t:
         pkgconf_node_t *head
         pkgconf_node_t *tail
         size_t length
