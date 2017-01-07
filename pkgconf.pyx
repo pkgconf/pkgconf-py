@@ -69,12 +69,6 @@ cdef class TupleIterator:
         return (tuple.key.decode('utf-8'), tuple.value.decode('utf-8'))
 
 
-cdef wrap_tuple_iter(libpkgconf.pkgconf_node_t *iter):
-     ti = TupleIterator()
-     ti.iter = iter
-     return ti
-
-
 cdef class TupleProxy:
     """A python dictionary-like object that maps to a list of key-value tuples."""
     cdef libpkgconf.pkgconf_list_t *wrapped
@@ -85,6 +79,11 @@ cdef class TupleProxy:
 
     def __repr__(self):
         return repr({k: v for k, v in self.items()})
+
+    def __iter__(self):
+        ti = TupleIterator()
+        ti.iter = self.wrapped.head
+        return ti
 
     def __getitem__(self, key):
         cdef const char *value
@@ -113,7 +112,7 @@ cdef class TupleProxy:
         return self.__getitem__(key) is not None
 
     def items(self):
-        return wrap_tuple_iter(self.wrapped.head)
+        return iter(self)
 
 
 cdef wrap_tuple(libpkgconf.pkgconf_list_t *tuple, libpkgconf.pkgconf_client_t *client):
