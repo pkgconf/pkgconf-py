@@ -61,6 +61,7 @@ cdef class TupleProxy:
             tu = <libpkgconf.pkgconf_tuple_t *> iter.data
             if tu.key == key:
                 libpkgconf.pkgconf_tuple_free_entry(tu, self.wrapped)
+                return
             iter = iter.next
 
     def __contains__(self, key):
