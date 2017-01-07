@@ -203,6 +203,18 @@ cdef class PackageRef:
     def requires(self):
         return self.deplist(&self.parent.requires)
 
+    @property
+    def requires_private(self):
+        return self.deplist(&self.parent.requires_private)
+
+    @property
+    def conflicts(self):
+        return self.deplist(&self.parent.conflicts)
+
+    @property
+    def provides(self):
+        return self.deplist(&self.parent.provides)
+
 
 cdef class Package(PackageRef):
     cdef libpkgconf.pkgconf_pkg_t pkg
