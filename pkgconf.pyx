@@ -58,7 +58,7 @@ cdef class FragmentIterator:
         frag = <libpkgconf.pkgconf_fragment_t *> iter.data
         self.iter = iter.next
 
-        return (chr(frag.type), <str> frag.data)
+        return (chr(frag.type) if frag.type else None, <str> frag.data)
 
 
 cdef class FragmentListRef:
