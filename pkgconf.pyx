@@ -9,9 +9,9 @@ cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *c
 
 cdef void traverse_trampoline(libpkgconf.pkgconf_client_t *client, libpkgconf.pkgconf_pkg_t *pkg, void *data, unsigned int flags):
     pr = PackageRef()
-    pr.pc_client = client
+    pr.client = data[1]
     pr.parent = pkg
-    (<object>data)(pr, flags)
+    (<object>data[0])(pr, flags)
 
 
 resolver_errmap = {
@@ -41,7 +41,6 @@ class ResolverError(Exception):
 
 
 cdef class DependencyRef:
-    cdef libpkgconf.pkgconf_client_t *pc_client
     cdef libpkgconf.pkgconf_dependency_t *wrapped
     cdef Client client
     cdef PackageRef parent
@@ -74,13 +73,12 @@ cdef class DependencyRef:
         cdef libpkgconf.pkgconf_pkg_t *pkg
         cdef unsigned int eflags = 0
 
-        pkg = libpkgconf.pkgconf_pkg_verify_dependency(self.pc_client, self.wrapped, traits, &eflags)
+        pkg = libpkgconf.pkgconf_pkg_verify_dependency(&self.client.pc_client, self.wrapped, traits, &eflags)
         if not pkg:
             raise ResolverError(eflags)
 
         pr = PackageRef()
         pr.client = self.client
-        pr.pc_client = &self.client.pc_client
         pr.parent = pkg
         return pr
 
@@ -101,7 +99,6 @@ cdef class DependencyIterator:
         dr = DependencyRef()
         dr.client = self.client
         dr.parent = self.parent
-        dr.pc_client = &self.client.pc_client
         dr.wrapped = <libpkgconf.pkgconf_dependency_t *> iter.data
         self.iter = iter.next
 
@@ -125,7 +122,6 @@ cdef class DependencyList:
 
 
 cdef class PackageRef:
-    cdef libpkgconf.pkgconf_client_t *pc_client
     cdef libpkgconf.pkgconf_pkg_t *parent
     cdef Client client
 
@@ -186,12 +182,13 @@ cdef class PackageRef:
     def vars(self):
         td = TupleProxy()
         td.wrapped = &self.parent.vars
-        td.wrapped_client = self.pc_client
+        td.wrapped_client = &self.client.pc_client
         return td
 
     def traverse(self, callback, maxdepth=-1, traits=0):
         """Traverse all dependent children below this point in the graph, up to maxdepth levels."""
-        result = libpkgconf.pkgconf_pkg_traverse(self.pc_client, self.parent, <libpkgconf.pkgconf_pkg_traverse_func_t> traverse_trampoline, <void *> callback, maxdepth, traits)
+        passback = (callback, self.client)
+        result = libpkgconf.pkgconf_pkg_traverse(&self.client.pc_client, self.parent, <libpkgconf.pkgconf_pkg_traverse_func_t> traverse_trampoline, <void *> passback, maxdepth, traits)
         if result:
             raise ResolverError(result)
 
@@ -230,7 +227,6 @@ cdef class Queue:
     The dependency resolution problem is then compiled into a dependency graph, which provides
     the solution when traversed.
     """
-    cdef libpkgconf.pkgconf_client_t *pc_client
     cdef libpkgconf.pkgconf_list_t qlist
     cdef libpkgconf.pkgconf_pkg_t world
     cdef Client client
@@ -244,7 +240,7 @@ cdef class Queue:
         self.client = client
 
     def __del__(self):
-        libpkgconf.pkgconf_pkg_free(self.pc_client, &self.world)
+        libpkgconf.pkgconf_pkg_free(&self.client.pc_client, &self.world)
         libpkgconf.pkgconf_queue_free(&self.qlist)
 
     def push(self, package):
@@ -262,10 +258,10 @@ cdef class Queue:
 
         :return: true if solvable
         """
-        if not libpkgconf.pkgconf_queue_compile(self.pc_client, &self.world, &self.qlist):
+        if not libpkgconf.pkgconf_queue_compile(&self.client.pc_client, &self.world, &self.qlist):
             raise ResolverError(libpkgconf.resolver_err.DependencyGraphBreak)
 
-        result = libpkgconf.pkgconf_pkg_verify_graph(self.pc_client, &self.world, maxdepth, traits)
+        result = libpkgconf.pkgconf_pkg_verify_graph(&self.client.pc_client, &self.world, maxdepth, traits)
         if result:
             raise ResolverError(result)
 
@@ -280,7 +276,6 @@ cdef class Queue:
 
         root = PackageRef()
         root.client = self.client
-        root.pc_client = self.pc_client
         root.parent = &self.world
 
         callback(self.client, root, maxdepth, traits)
@@ -447,7 +442,6 @@ cdef class Client:
     def queue(self):
         """Creates a new dependency resolver attached to this client."""
         q = Queue(self)
-        q.pc_client = &self.pc_client
         return q
 
     def lookup_package(self, name, traits=0):
@@ -458,7 +452,7 @@ cdef class Client:
             return None
         pr = PackageRef()
         pr.parent = pkg
-        pr.pc_client = &self.pc_client
+        pr.client = self
         return pr
 
 
