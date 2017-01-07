@@ -7,6 +7,13 @@ cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *c
     (<object>error_data).handle_error(msg.decode('utf-8')[0:-1])
 
 
+cdef void traverse_trampoline(libpkgconf.pkgconf_client_t *client, libpkgconf.pkgconf_pkg_t *pkg, void *data, unsigned int flags):
+    pr = PackageRef()
+    pr.pc_client = client
+    pr.parent = pkg
+    (<object>data)(pr, flags)
+
+
 resolver_errmap = {
     libpkgconf.resolver_err.NoError: 'no error',
     libpkgconf.resolver_err.PackageNotFound: 'package not found',
@@ -16,15 +23,111 @@ resolver_errmap = {
 }
 
 
+comparator_map = {
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_NOT_EQUAL: '!=',
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_ANY: '(any)',
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_LESS_THAN: '<',
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_LESS_THAN_EQUAL: '<=',
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_EQUAL: '=',
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_GREATER_THAN: '>',
+    libpkgconf.pkgconf_pkg_comparator_t.PKGCONF_CMP_GREATER_THAN_EQUAL: '>=',
+}
+
+
 class ResolverError(Exception):
     def __init__(self, err):
         global resolver_errmap
         super().__init__(resolver_errmap.get(err, 'unknown error'))
 
 
+cdef class DependencyRef:
+    cdef libpkgconf.pkgconf_client_t *pc_client
+    cdef libpkgconf.pkgconf_dependency_t *wrapped
+    cdef Client client
+    cdef PackageRef parent
+
+    def __repr__(self):
+        global comparator_map
+
+        summary = "<DependencyRef: %s" % self.package
+        if self.compare != libpkgconf.pkgconf_pkg_comparator_.PKGCONF_CMP_ANY:
+            summary += " %s %s" % (comparator_map.get(self.compare, '???'), self.version)
+        summary += ">"
+
+    @property
+    def package(self):
+        if not self.wrapped.package:
+            return None
+        return self.wrapped.package.decode('utf-8')
+
+    @property
+    def compare(self):
+        return self.wrapped.compare
+
+    @property
+    def version(self):
+        if not self.wrapped.version:
+            return None
+        return self.wrapped.version.decode('utf-8')
+
+    def resolve(self, traits=0):
+        cdef libpkgconf.pkgconf_pkg_t *pkg
+        cdef unsigned int eflags = 0
+
+        pkg = libpkgconf.pkgconf_pkg_verify_dependency(self.pc_client, self.wrapped, traits, &eflags)
+        if not pkg:
+            raise ResolverError(eflags)
+
+        pr = PackageRef()
+        pr.client = self.client
+        pr.pc_client = &self.client.pc_client
+        pr.parent = pkg
+        return pr
+
+
+cdef class DependencyIterator:
+    cdef Client client
+    cdef PackageRef parent
+    cdef libpkgconf.pkgconf_node_t *iter
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if not self.iter:
+            raise StopIteration()
+
+        iter = self.iter
+        dr = DependencyRef()
+        dr.client = self.client
+        dr.parent = self.parent
+        dr.pc_client = &self.client.pc_client
+        dr.wrapped = <libpkgconf.pkgconf_dependency_t *> iter.data
+        self.iter = iter.next
+
+        return dr
+
+
+cdef class DependencyList:
+    cdef Client client
+    cdef PackageRef parent
+    cdef libpkgconf.pkgconf_list_t *lst
+
+    def __iter__(self):
+        di = DependencyIterator()
+        di.client = self.client
+        di.parent = self.parent
+        di.iter = self.lst.head
+        return di
+
+    def __repr__(self):
+        repr([x for x in self])
+
+
 cdef class PackageRef:
     cdef libpkgconf.pkgconf_client_t *pc_client
     cdef libpkgconf.pkgconf_pkg_t *parent
+    cdef Client client
 
     def __repr__(self):
         summary = "<PackageRef: %s" % self.name
@@ -86,6 +189,23 @@ cdef class PackageRef:
         td.wrapped_client = self.pc_client
         return td
 
+    def traverse(self, callback, maxdepth=-1, traits=0):
+        """Traverse all dependent children below this point in the graph, up to maxdepth levels."""
+        result = libpkgconf.pkgconf_pkg_traverse(self.pc_client, self.parent, <libpkgconf.pkgconf_pkg_traverse_func_t> traverse_trampoline, <void *> callback, maxdepth, traits)
+        if result:
+            raise ResolverError(result)
+
+    cdef deplist(self, libpkgconf.pkgconf_list_t *lst):
+        dl = DependencyList()
+        dl.client = self.client
+        dl.parent = self
+        dl.lst = lst
+        return dl
+
+    @property
+    def requires(self):
+        return self.deplist(&self.parent.requires)
+
 
 cdef class Package(PackageRef):
     cdef libpkgconf.pkgconf_pkg_t pkg
@@ -113,11 +233,15 @@ cdef class Queue:
     cdef libpkgconf.pkgconf_client_t *pc_client
     cdef libpkgconf.pkgconf_list_t qlist
     cdef libpkgconf.pkgconf_pkg_t world
+    cdef Client client
 
-    def __cinit__(self):
+    def __cinit__(self, client):
         self.world.id = b'virtual:world'
         self.world.realname = b'virtual world package'
         self.world.flags = libpkgconf.property_flags.Virtual
+
+    def __init__(self, client):
+        self.client = client
 
     def __del__(self):
         libpkgconf.pkgconf_pkg_free(self.pc_client, &self.world)
@@ -322,7 +446,7 @@ cdef class Client:
 
     def queue(self):
         """Creates a new dependency resolver attached to this client."""
-        q = Queue()
+        q = Queue(self)
         q.pc_client = &self.pc_client
         return q
 

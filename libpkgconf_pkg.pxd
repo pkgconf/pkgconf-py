@@ -2,6 +2,15 @@ from libcpp cimport bool
 from libpkgconf_iter cimport *
 from libpkgconf_client cimport *
 
+ctypedef enum pkgconf_pkg_comparator_t:
+    PKGCONF_CMP_NOT_EQUAL
+    PKGCONF_CMP_ANY
+    PKGCONF_CMP_LESS_THAN
+    PKGCONF_CMP_LESS_THAN_EQUAL
+    PKGCONF_CMP_EQUAL
+    PKGCONF_CMP_GREATER_THAN
+    PKGCONF_CMP_GREATER_THAN_EQUAL
+
 cdef enum property_flags:
     None                       = 0x0
     Virtual                    = 0x1
@@ -15,17 +24,6 @@ cdef enum resolver_err:
     VersionMismatch            = 0x2
     PackageConflict            = 0x4
     DependencyGraphBreak       = 0x8
-
-cdef enum pkgconf_pkg_comparator_:
-    PKGCONF_CMP_NOT_EQUAL
-    PKGCONF_CMP_ANY
-    PKGCONF_CMP_LESS_THAN
-    PKGCONF_CMP_LESS_THAN_EQUAL
-    PKGCONF_CMP_EQUAL
-    PKGCONF_CMP_GREATER_THAN
-    PKGCONF_CMP_GREATER_THAN_EQUAL
-
-ctypedef pkgconf_pkg_comparator_ pkgconf_pkg_comparator_t
 
 ctypedef pkgconf_dependency_ pkgconf_dependency_t
 ctypedef pkgconf_pkg_ pkgconf_pkg_t
