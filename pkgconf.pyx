@@ -68,6 +68,9 @@ cdef class FragmentList:
     def __len__(self):
         return self.lst.length
 
+    def __repr__(self):
+        return repr([x for x in self])
+
     def __iter__(self):
         fi = FragmentIterator()
         fi.iter = self.lst.head
