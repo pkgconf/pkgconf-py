@@ -2,6 +2,13 @@ from libcpp cimport bool
 from libpkgconf_iter cimport *
 from libpkgconf_client cimport *
 
+cdef enum property_flags:
+    None                       = 0x0
+    Virtual                    = 0x1
+    Cached                     = 0x2
+    Seen                       = 0x4
+    Uninstalled                = 0x8
+
 cdef enum resolver_err:
     NoError                    = 0x0
     PackageNotFound            = 0x1

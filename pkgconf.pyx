@@ -1,3 +1,4 @@
+from libc.string cimport strdup
 from libcpp cimport bool
 cimport libpkgconf
 
@@ -17,7 +18,115 @@ resolver_errmap = {
 
 class ResolverError(Exception):
     def __init__(self, err):
+        global resolver_errmap
         super().__init__(resolver_errmap.get(err, 'unknown error'))
+
+
+cdef class PackageRef:
+    cdef libpkgconf.pkgconf_pkg_t *parent
+
+    def __repr__(self):
+        summary = "<PackageRef: %s" % self.name
+        if self.version:
+            summary += " [%s]" % self.version
+        summary += ">"
+        return summary
+
+    @property
+    def name(self):
+        if not self.parent.id:
+            return None
+        return self.parent.id.decode('utf-8')
+
+    @property
+    def realname(self):
+        if not self.parent.realname:
+            return None
+        return self.parent.realname.decode('utf-8')
+
+    @property
+    def version(self):
+        if not self.parent.version:
+            return None
+        return self.parent.version.decode('utf-8')
+
+    @property
+    def flags(self):
+        return self.parent.flags
+
+
+cdef class Package(PackageRef):
+    cdef libpkgconf.pkgconf_pkg_t pkg
+
+    def __cinit__(self, *args, **kwargs):
+        self.parent = &self.pkg
+
+    def __init__(self, name, realname, version=None, flags=libpkgconf.property_flags.Virtual):
+        self.pkg.id = strdup(name.encode('utf-8'))
+        self.pkg.realname = strdup(realname.encode('utf-8'))
+        if version:
+            self.pkg.version = strdup(version.encode('utf-8'))
+        if flags:
+            self.pkg.flags = flags
+
+
+cdef class Queue:
+    """A dependency resolution queue.
+
+    This is the top level object of the dependency resolver.  The dependency resolution
+    problem is pushed onto the queue, which is basically a stack of package dependencies.
+    The dependency resolution problem is then compiled into a dependency graph, which provides
+    the solution when traversed.
+    """
+    cdef libpkgconf.pkgconf_client_t *pc_client
+    cdef libpkgconf.pkgconf_list_t qlist
+    cdef libpkgconf.pkgconf_pkg_t world
+
+    def __cinit__(self):
+        self.world.id = b'virtual:world'
+        self.world.realname = b'virtual world package'
+        self.world.flags = libpkgconf.property_flags.Virtual
+
+    def __del__(self):
+        libpkgconf.pkgconf_pkg_free(self.pc_client, &self.world)
+        libpkgconf.pkgconf_queue_free(&self.qlist)
+
+    def push(self, package):
+        """Push a requested dependency onto the dependency resolver's queue.
+
+        :param str package:
+            The package dependency described as <package> [comparator [version]].
+        """
+        libpkgconf.pkgconf_queue_push(&self.qlist, package.encode('utf-8'))
+
+    def validate(self, maxdepth=-1, traits=0):
+        """Verifies a dependency resolution queue by attempting to solve it.
+        Returns true if solvable, else throws ResolverError if an exception
+        is encountered.
+
+        :return: true if solvable
+        """
+        if not libpkgconf.pkgconf_queue_compile(self.pc_client, &self.world, &self.qlist):
+            raise ResolverError(libpkgconf.resolver_err.DependencyGraphBreak)
+
+        result = libpkgconf.pkgconf_pkg_verify_graph(self.pc_client, &self.world, maxdepth, traits)
+        if result:
+            raise ResolverError(result)
+
+        return True
+
+    def apply(self, callback, maxdepth=-1, traits=0):
+        """Compiles a dependency resolution queue and pass the solution to a callback to begin
+        traversal.  Throws ResolverError if an exception is encountered.
+        """
+        if not self.validate(maxdepth, traits):
+            return
+
+        root = PackageRef()
+        root.client = self.client
+        root.parent = &self.world
+
+        callback(self.client, root, maxdepth, traits)
 
 
 cdef class PathIterator:
@@ -177,6 +286,12 @@ cdef class Client:
     @property
     def filter_includedirs(self):
         return self.wrap_path_list(&self.pc_client.filter_includedirs)
+
+    def queue(self):
+        """Creates a new dependency resolver attached to this client."""
+        q = Queue()
+        q.pc_client = &self.pc_client
+        return q
 
 
 def compare_version(a, b):
