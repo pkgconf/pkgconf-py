@@ -67,6 +67,18 @@ cdef void traverse_trampoline(libpkgconf.pkgconf_client_t *client, libpkgconf.pk
     (<object>data[0])(pr, flags)
 
 
+# XXX - no user pointer, so we have to do all this.  fix it in next ABI change.
+cdef object filter_calldata = None
+cdef bool filter_trampoline(const libpkgconf.pkgconf_client_t *client, const libpkgconf.pkgconf_fragment_t *frag, unsigned int flags):
+    if not filter_calldata:
+        return False
+
+    fr = FragmentRef()
+    fr.wrapped = frag
+    fr.client = filter_calldata[1]
+    return filter_calldata[0](fr, flags)
+
+
 resolver_errmap = {
     libpkgconf.resolver_err.NoError: 'no error',
     libpkgconf.resolver_err.PackageNotFound: 'package not found',
@@ -185,6 +197,18 @@ cdef class FragmentListRef:
 
     def remove(self, FragmentRef frag):
         node_delete(&frag.wrapped.iter, self.lst)
+
+    def filter(self, callback, traits=0):
+        global filter_calldata
+
+        filter_calldata = (callback, self.client)
+
+        fl = FragmentList(self.client)
+        libpkgconf.pkgconf_fragment_filter(&self.client.pc_client, fl.lst, self.lst, <libpkgconf.pkgconf_fragment_filter_func_t> filter_trampoline, traits)
+
+        filter_calldata = None
+
+        return fl
 
 
 cdef class FragmentList(FragmentListRef):
