@@ -6,6 +6,56 @@ from libcpp cimport bool
 cimport libpkgconf
 
 
+cdef void node_insert(libpkgconf.pkgconf_node_t *node, void *data, libpkgconf.pkgconf_list_t *list):
+    cdef libpkgconf.pkgconf_node_t *tnode
+
+    node.data = data
+    if not list.head:
+        list.head = node
+        list.tail = node
+        list.length = 1
+        return
+
+    tnode = list.head
+
+    node.next = tnode
+    tnode.prev = node
+
+    list.head = node
+    list.length += 1
+
+cdef void node_insert_tail(libpkgconf.pkgconf_node_t *node, void *data, libpkgconf.pkgconf_list_t *list):
+    cdef libpkgconf.pkgconf_node_t *tnode
+
+    node.data = data
+    if not list.head:
+        list.head = node
+        list.tail = node
+        list.length = 1
+        return
+
+    tnode = list.tail
+
+    node.prev = tnode
+    tnode.next = node
+
+    list.tail = node
+    list.length += 1
+
+cdef void node_delete(libpkgconf.pkgconf_node_t *node, libpkgconf.pkgconf_list_t *list):
+    list.length -= 1
+
+    if not node.prev:
+        list.head = node.next
+    else:
+        node.prev.next = node.next
+
+    if not node.next:
+        list.tail = node.prev
+    else:
+        node.next.prev = node.prev
+
+
 cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *client, void *error_data):
     (<object>error_data).handle_error(<str> msg[0:-1])
 
@@ -42,23 +92,67 @@ class ResolverError(Exception):
         super().__init__(resolver_errmap.get(err, 'unknown error'))
 
 
+cdef class FragmentRef:
+    cdef libpkgconf.pkgconf_fragment_t *wrapped
+    cdef Client client
+
+    def __repr__(self):
+        return "FragmentRef(type=%r, data=%r, has_system_dir=%r)" % (self.type, self.data, self.has_system_dir)
+
+    def __getitem__(self, index):
+        if index == 0:
+            if self.wrapped.type:
+                return chr(self.wrapped.type)
+            else:
+                return None
+        if index == 1:
+            return <str> self.wrapped.data
+        raise IndexError()
+
+    @property
+    def type(self):
+        return self[0]
+
+    @property
+    def data(self):
+        return self[1]
+
+    @property
+    def has_system_dir(self):
+        """True if the fragment contains a system directory, else False."""
+        return libpkgconf.pkgconf_fragment_has_system_dir(&self.client.pc_client, self.wrapped)
+
+
+cdef class Fragment(FragmentRef):
+    cdef libpkgconf.pkgconf_fragment_t parent
+
+    def __cinit__(self):
+        self.wrapped = &self.parent
+
+    def __init__(self, client, type, data):
+        self.client = client
+        self.wrapped.type = ord(type)
+        self.wrapped.data = strdup(data.encode('utf-8'))
+
+
 cdef class FragmentIterator:
     cdef libpkgconf.pkgconf_node_t *iter
+    cdef Client client
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        cdef libpkgconf.pkgconf_fragment_t *frag
-
         if not self.iter:
             raise StopIteration()
 
         iter = self.iter
-        frag = <libpkgconf.pkgconf_fragment_t *> iter.data
+        frag = FragmentRef()
+        frag.client = self.client
+        frag.wrapped = <libpkgconf.pkgconf_fragment_t *> self.iter.data
         self.iter = iter.next
 
-        return (chr(frag.type) if frag.type else None, <str> frag.data)
+        return frag
 
 
 cdef class FragmentListRef:
@@ -75,6 +169,7 @@ cdef class FragmentListRef:
     def __iter__(self):
         fi = FragmentIterator()
         fi.iter = self.lst.head
+        fi.client = self.client
         return fi
 
     def __str__(self):
@@ -84,12 +179,22 @@ cdef class FragmentListRef:
 
         return buf
 
+    def append(self, FragmentRef frag):
+        node_insert_tail(&frag.wrapped.iter, frag.wrapped, self.lst)
+        return self
+
+    def remove(self, FragmentRef frag):
+        node_delete(&frag.wrapped.iter, self.lst)
+
 
 cdef class FragmentList(FragmentListRef):
     cdef libpkgconf.pkgconf_list_t fraglist
 
-    def __cinit__(self):
+    def __cinit__(self, *):
         self.lst = &self.fraglist
+
+    def __init__(self, Client client):
+        self.client = client
 
 
 cdef class DependencyRef:
