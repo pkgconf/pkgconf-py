@@ -79,6 +79,13 @@ cdef bool filter_trampoline(const libpkgconf.pkgconf_client_t *client, const lib
     return filter_calldata[0](fr, flags)
 
 
+cdef bool scan_trampoline(const libpkgconf.pkgconf_pkg_t *pkg, void *data):
+    pr = PackageRef()
+    pr.client = data[1]
+    pr.parent = <libpkgconf.pkgconf_pkg_t *> pkg
+    (<object>data[0])(pr)
+
+
 resolver_errmap = {
     libpkgconf.resolver_err.NoError: 'no error',
     libpkgconf.resolver_err.PackageNotFound: 'package not found',
@@ -699,6 +706,17 @@ cdef class Client:
         """Looks up a package and returns a Package reference."""
         cdef libpkgconf.pkgconf_pkg_t *pkg
         pkg = libpkgconf.pkgconf_pkg_find(&self.pc_client, name.encode('utf-8'), traits)
+        if not pkg:
+            return None
+        pr = PackageRef()
+        pr.parent = pkg
+        pr.client = self
+        return pr
+
+    def scan_all(self, callback=lambda pkg: False):
+        cdef libpkgconf.pkgconf_pkg_t *pkg
+        passback = (callback, self)
+        pkg = libpkgconf.pkgconf_scan_all(&self.pc_client, <void *> passback, <libpkgconf.pkgconf_pkg_iteration_func_t> scan_trampoline)
         if not pkg:
             return None
         pr = PackageRef()
