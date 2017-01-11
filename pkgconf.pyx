@@ -61,10 +61,12 @@ cdef void error_trampoline(const char *msg, const libpkgconf.pkgconf_client_t *c
 
 
 cdef void traverse_trampoline(libpkgconf.pkgconf_client_t *client, libpkgconf.pkgconf_pkg_t *pkg, void *data, unsigned int flags):
+    passback = <object> data
+
     pr = PackageRef()
-    pr.client = data[1]
+    pr.client = passback[1]
     pr.parent = pkg
-    (<object>data[0])(pr, flags)
+    (passback[0])(pr, flags)
 
 
 # XXX - no user pointer, so we have to do all this.  fix it in next ABI change.
@@ -80,10 +82,11 @@ cdef bool filter_trampoline(const libpkgconf.pkgconf_client_t *client, const lib
 
 
 cdef bool scan_trampoline(const libpkgconf.pkgconf_pkg_t *pkg, void *data):
+    passback = <object> data
     pr = PackageRef()
-    pr.client = data[1]
+    pr.client = passback[1]
     pr.parent = <libpkgconf.pkgconf_pkg_t *> pkg
-    (<object>data[0])(pr)
+    (<object>passback[0])(pr)
 
 
 resolver_errmap = {
