@@ -84,3 +84,5 @@ cdef extern from "libpkgconf/libpkgconf.h":
     void pkgconf_queue_free(pkgconf_list_t *list)
     bool pkgconf_queue_apply(pkgconf_client_t *client, pkgconf_list_t *list, pkgconf_queue_apply_func_t func, int maxdepth, unsigned int flags, void *data)
     bool pkgconf_queue_validate(pkgconf_client_t *client, pkgconf_list_t *list, int maxdepth, unsigned int flags)
+
+    pkgconf_pkg_t *pkgconf_scan_all(pkgconf_client_t *client, void *ptr, pkgconf_pkg_iteration_func_t func)
