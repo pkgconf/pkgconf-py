@@ -316,6 +316,10 @@ cdef class DependencyList:
 cdef class PackageRef:
     cdef libpkgconf.pkgconf_pkg_t *parent
     cdef Client client
+    cdef bool should_deref
+
+    def __cinit__(self):
+        self.should_deref = False
 
     def __repr__(self):
         summary = "<PackageRef: %s" % self.name
@@ -325,6 +329,19 @@ cdef class PackageRef:
             summary += ", refcount=%d" % self.refcount
         summary += ">"
         return summary
+
+    def __dealloc__(self):
+        self.unref()
+
+    def ref(self):
+        self.should_deref = True
+        libpkgconf.pkgconf_pkg_ref(&self.client.pc_client, self.parent)
+        return self
+
+    def unref(self):
+        if not self.should_deref:
+            return
+        libpkgconf.pkgconf_pkg_unref(&self.client.pc_client, self.parent)
 
     @property
     def refcount(self):
@@ -712,7 +729,7 @@ cdef class Client:
         if not pkg:
             return None
         pr = PackageRef()
-        pr.parent = pkg
+        pr.parent = libpkgconf.pkgconf_pkg_ref(&self.pc_client, pkg)
         pr.client = self
         return pr
 
@@ -723,9 +740,20 @@ cdef class Client:
         if not pkg:
             return None
         pr = PackageRef()
-        pr.parent = pkg
+        pr.parent = libpkgconf.pkgconf_pkg_ref(&self.pc_client, pkg)
         pr.client = self
         return pr
+
+    @property
+    def packages(self):
+        pkglist = []
+
+        def scan_callback(pkg):
+            pkglist.append(pkg.ref())
+            return False
+
+        self.scan_all(scan_callback)
+        return pkglist
 
 
 def compare_version(a, b):
