@@ -74,7 +74,7 @@ cdef bool filter_trampoline(const libpkgconf.pkgconf_client_t *client, const lib
         return False
 
     fr = FragmentRef()
-    fr.wrapped = frag
+    fr.wrapped = <libpkgconf.pkgconf_fragment_t *> frag
     fr.client = filter_calldata[1]
     return filter_calldata[0](fr, flags)
 
@@ -143,8 +143,8 @@ cdef class Fragment(FragmentRef):
 
     def __init__(self, client, type, data):
         self.client = client
-        self.wrapped.type = ord(type)
-        self.wrapped.data = strdup(data.encode('utf-8'))
+        self.parent.type = ord(type)
+        self.parent.data = strdup(data.encode('utf-8'))
 
 
 cdef class FragmentIterator:
